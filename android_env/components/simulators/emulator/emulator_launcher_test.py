@@ -39,8 +39,9 @@ class EmulatorLauncherTest(absltest.TestCase):
 
     self._expected_command = [
         self._emulator_path,
-        '-adb-path',
-        'fake/path/adb',
+        ## Orlando: invalid argument for the latest Android emulator in Android Studio Electric Eel | 2022.1.1 Patch 1, Build #AI-221.6008.13.2211.9514443, built on January 20, 2023
+        # '-adb-path',
+        # 'fake/path/adb',
         '-gpu',
         'swiftshader_indirect',
         '-no-audio',

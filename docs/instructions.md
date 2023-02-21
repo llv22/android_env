@@ -1,3 +1,4 @@
+<!-- markdownlint-disable-file MD001 MD030 MD047 MD051 -->
 # AndroidEnv - Running the environment
 
 In order to create an AndroidEnv instance you will need to provide two main
@@ -113,3 +114,10 @@ python3 run_random_agent.py \
 --num_steps=1000 \
 --task_path=/Users/username/<PATH-TO-APP-TASK-FILES>/apple_flinger_M_1_1.textproto
 ```
+
+## Refinement for latest emulator
+
+1. adb_path become invalid any more
+
+* comment out for Line 42 - Line 43, /Users/llv23/Documents/05_machine_learning/04_phd/4_flow_action/android_env/android_env/components/simulators/emulator/emulator_launcher_test.py
+* comment out for Line 143 - Line 144, /Users/llv23/Documents/05_machine_learning/04_phd/4_flow_action/android_env/android_env/components/simulators/emulator/emulator_launcher.py

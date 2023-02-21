@@ -140,8 +140,9 @@ class EmulatorLauncher:
     network_args = restrict_network_args if self._restrict_network else []
     command = [
         self._emulator_path,
-        '-adb-path',
-        self._adb_path,
+        ## Orlando: invalid argument for the latest Android emulator in Android Studio Electric Eel | 2022.1.1 Patch 1, Build #AI-221.6008.13.2211.9514443, built on January 20, 2023
+        # '-adb-path',
+        # self._adb_path,
         '-gpu',
         self._gpu_mode,
         '-no-audio',
