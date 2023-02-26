@@ -4,3 +4,5 @@ dist/
 android_env.egg-info/
 android_env/proto/*.py
 .DS_Store
+__pycache__/
+.vscode/
