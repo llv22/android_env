@@ -486,7 +486,7 @@ class AdbCallParser:
       if physical_width:
         skip_next = int(physical_width.group(1)) < 0
 
-      surface_orientation = re.match(r'\s+SurfaceOrientation:\s+(\d)', line)
+      surface_orientation = re.match(r'\s+InputDeviceOrientation:\s+(\d)', line)
       if surface_orientation is not None:
         if skip_next:
           continue
@@ -496,7 +496,7 @@ class AdbCallParser:
         return response
 
     response.status = adb_pb2.AdbResponse.Status.INTERNAL_ERROR
-    response.error_message = ('Could not find SurfaceOrientation in dumpsys '
+    response.error_message = ('Could not find InputDeviceOrientation in dumpsys '
                               'output')
     return response
 
