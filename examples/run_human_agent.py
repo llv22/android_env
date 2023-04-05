@@ -27,6 +27,7 @@ from android_env.components import utils
 import dm_env
 import numpy as np
 import pygame
+from android_env.wrappers import discrete_action_wrapper, tap_action_wrapper
 
 # Simulator args.
 flags.DEFINE_string('avd_name', None, 'Name of AVD to use.')
@@ -121,6 +122,11 @@ def _render_pygame_frame(surface: pygame.Surface, screen: pygame.Surface,
 
   pygame.display.flip()
 
+def apply_wrappers(env):
+  """Applies a series of wrappers to the environment."""
+  # env = discrete_action_wrapper.DiscreteActionWrapper(env, action_grid=(10, 10))
+  env = tap_action_wrapper.TapActionWrapper(env)
+  return env
 
 def main(_):
 
@@ -135,6 +141,9 @@ def main(_):
       adb_path=FLAGS.adb_path,
       task_path=FLAGS.task_path,
       run_headless=FLAGS.run_headless) as env:
+    
+    # see: add wrapper for env
+    env = apply_wrappers(env)
 
     # Reset environment.
     first_timestep = env.reset()
