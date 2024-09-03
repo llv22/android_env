@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
 # limitations under the License.
 
 """Definitions of exceptions used by AndroidEnv."""
-
-from typing import Optional
 
 
 class AndroidEnvError(Exception):
@@ -80,7 +78,7 @@ class CheckInstallError(StepCommandError):
   ERROR_CODE = 9
 
 
-def from_code(code: int, msg: str = '') -> Optional[AndroidEnvError]:
+def from_code(code: int, msg: str = '') -> AndroidEnvError | None:
   """Returns an AndroidEnvError instance from the given arguments."""
 
   code_to_error = {
@@ -98,4 +96,3 @@ def from_code(code: int, msg: str = '') -> Optional[AndroidEnvError]:
 
   if code in code_to_error:
     return code_to_error[code](msg)
-

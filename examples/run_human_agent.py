@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,13 +16,14 @@
 """Loads an interactive session where a human acts on behalf of an agent."""
 
 import time
-from typing import Any, Dict
+from typing import Any
 
 from absl import app
 from absl import flags
 from absl import logging
 from android_env import loader
 from android_env.components import action_type
+from android_env.components import config_classes
 from android_env.components import utils
 import dm_env
 import numpy as np
@@ -49,8 +50,9 @@ flags.DEFINE_float('frame_rate', 1.0/30.0, 'Frame rate in seconds.')
 FLAGS = flags.FLAGS
 
 
-def _get_action_from_event(event: pygame.event.Event, screen: pygame.Surface,
-                           orientation: int) -> Dict[str, Any]:
+def _get_action_from_event(
+    event: pygame.event.Event, screen: pygame.Surface, orientation: int
+) -> dict[str, Any]:
   """Returns the current action by reading data from a pygame Event object."""
 
   act_type = action_type.ActionType.LIFT
@@ -65,8 +67,9 @@ def _get_action_from_event(event: pygame.event.Event, screen: pygame.Surface,
   }
 
 
-def _get_action_from_mouse(screen: pygame.Surface,
-                           orientation: int) -> Dict[str, Any]:
+def _get_action_from_mouse(
+    screen: pygame.Surface, orientation: int
+) -> dict[str, Any]:
   """Returns the current action by reading data from the mouse."""
 
   act_type = action_type.ActionType.LIFT
@@ -133,17 +136,22 @@ def main(_):
   pygame.init()
   pygame.display.set_caption('android_human_agent')
 
-  with loader.load(
-      emulator_path=FLAGS.emulator_path,
-      android_sdk_root=FLAGS.android_sdk_root,
-      android_avd_home=FLAGS.android_avd_home,
-      avd_name=FLAGS.avd_name,
-      adb_path=FLAGS.adb_path,
-      task_path=FLAGS.task_path,
-      run_headless=FLAGS.run_headless) as env:
-    
-    # see: add wrapper for env
-    env = apply_wrappers(env)
+  config = config_classes.AndroidEnvConfig(
+      task=config_classes.FilesystemTaskConfig(path=FLAGS.task_path),
+      simulator=config_classes.EmulatorConfig(
+          emulator_launcher=config_classes.EmulatorLauncherConfig(
+              emulator_path=FLAGS.emulator_path,
+              android_sdk_root=FLAGS.android_sdk_root,
+              android_avd_home=FLAGS.android_avd_home,
+              avd_name=FLAGS.avd_name,
+              run_headless=FLAGS.run_headless,
+          ),
+          adb_controller=config_classes.AdbControllerConfig(
+              adb_path=FLAGS.adb_path
+          ),
+      ),
+  )
+  with loader.load(config) as env:
 
     # Reset environment.
     first_timestep = env.reset()

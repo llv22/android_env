@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,11 +15,8 @@
 
 """Base specs for AndroidEnv."""
 
-from typing import Dict
-
 from android_env.components import action_type
 from android_env.proto import task_pb2
-import dm_env
 from dm_env import specs
 import numpy as np
 
@@ -45,8 +42,9 @@ _PROTO_DTYPE_TO_NUMPY_DTYPE = {
 }
 
 
-def base_action_spec(num_fingers: int = 1,
-                     enable_key_events: bool = False) -> Dict[str, specs.Array]:
+def base_action_spec(
+    num_fingers: int = 1, enable_key_events: bool = False
+) -> dict[str, specs.Array]:
   """Default action spec for AndroidEnv.
 
   Args:
@@ -59,6 +57,8 @@ def base_action_spec(num_fingers: int = 1,
     touch_position: Position [x, y] of the touch action, where x, y are float
       values between 0.0 and 1.0 corresponding to the relative position on the
       screen. IGNORED when (action_type != ActionType.TOUCH).
+    keycode: code representing the desired key press in XKB format. See the
+      emulator_controller_pb2 for details.
     action_type_i: Action type for additional fingers (i>1).
     touch_position_i: Touch position for additional fingers (i>1).
   """
@@ -99,7 +99,7 @@ def base_action_spec(num_fingers: int = 1,
   return action_spec
 
 
-def base_observation_spec(height: int, width: int) -> Dict[str, specs.Array]:
+def base_observation_spec(height: int, width: int) -> dict[str, specs.Array]:
   """Default observation spec for AndroidEnv.
 
   Args:
@@ -136,21 +136,3 @@ def base_observation_spec(height: int, width: int) -> Dict[str, specs.Array]:
               minimum=0,
               maximum=1),
   }
-
-
-def base_task_extras_spec(task: task_pb2.Task) -> Dict[str, dm_env.specs.Array]:
-  """Task extras spec for AndroidEnv, as read from a task_pb2.Task."""
-
-  return {
-      spec.name: _convert_spec(spec)
-      for spec in task.extras_spec
-  }
-
-
-def _convert_spec(array_spec: task_pb2.ArraySpec) -> specs.Array:
-  """Converts ArraySpec proto to dm_env specs.Array."""
-
-  return specs.Array(
-      shape=array_spec.shape,
-      dtype=_PROTO_DTYPE_TO_NUMPY_DTYPE[array_spec.dtype],
-      name=array_spec.name)

@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,10 +18,10 @@
 import random
 import threading
 import time
-from typing import List, Optional, Tuple
 
 from absl import logging
 from android_env.components import adb_controller
+from android_env.components import config_classes
 from android_env.components import log_stream
 from android_env.components.simulators import base_simulator
 import numpy as np
@@ -77,10 +77,12 @@ class FakeLogStream(log_stream.LogStream):
 class FakeAdbController(adb_controller.AdbController):
   """Fake adb controller for FakeSimulator."""
 
-  def execute_command(self,
-                      args: List[str],
-                      timeout: Optional[float] = None,
-                      device_specific: bool = True) -> bytes:
+  def execute_command(
+      self,
+      args: list[str],
+      timeout: float | None = None,
+      device_specific: bool = True,
+  ) -> bytes:
     """Returns fake output for adb commands."""
 
     del timeout, device_specific
@@ -104,18 +106,10 @@ class FakeAdbController(adb_controller.AdbController):
 class FakeSimulator(base_simulator.BaseSimulator):
   """FakeSimulator class."""
 
-  def __init__(self,
-               screen_dimensions: Tuple[int, int] = (480, 320),
-               **kwargs):
-    """FakeSimulator class that can replace EmulatorSimulator in AndroidEnv.
-
-    Args:
-      screen_dimensions: desired screen dimensions in pixels. This determines
-        the shape of the screenshots returned by get_screenshot().
-      **kwargs: other keyword arguments for the base class.
-    """
-    super().__init__(**kwargs)
-    self._screen_dimensions = np.array(screen_dimensions)
+  def __init__(self, config: config_classes.FakeSimulatorConfig):
+    """FakeSimulator class that can replace EmulatorSimulator in AndroidEnv."""
+    super().__init__(verbose_logs=config.verbose_logs)
+    self._screen_dimensions = np.array(config.screen_dimensions)
     logging.info('Created FakeSimulator.')
 
   def get_logs(self) -> str:
@@ -125,7 +119,7 @@ class FakeSimulator(base_simulator.BaseSimulator):
     return 'fake_simulator'
 
   def create_adb_controller(self):
-    return FakeAdbController()
+    return FakeAdbController(config_classes.AdbControllerConfig())
 
   def create_log_stream(self) -> log_stream.LogStream:
     return FakeLogStream()
@@ -133,7 +127,7 @@ class FakeSimulator(base_simulator.BaseSimulator):
   def _launch_impl(self) -> None:
     pass
 
-  def send_touch(self, touches: List[Tuple[int, int, bool, int]]) -> None:
+  def send_touch(self, touches: list[tuple[int, int, bool, int]]) -> None:
     del touches
 
   def send_key(self, keycode: np.int32, event_type: str) -> None:

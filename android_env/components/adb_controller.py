@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,34 +18,20 @@
 import os
 import subprocess
 import time
-from typing import List, Optional
 
 from absl import logging
+from android_env.components import config_classes
 from android_env.components import errors
 
 
 class AdbController:
   """Manages communication with adb."""
 
-  def __init__(self,
-               device_name: str = '',
-               adb_path: str = 'adb',
-               adb_server_port: int = 5037,
-               default_timeout: float = 120.0):
-    """Instantiates an AdbController object.
+  def __init__(self, config: config_classes.AdbControllerConfig):
+    """Instantiates an AdbController object."""
 
-    Args:
-      device_name: Name of the device to communicate with.
-      adb_path: Path to the adb binary.
-      adb_server_port: Port for adb server.
-      default_timeout: Default timeout in seconds.
-    """
-
-    self._device_name = device_name
-    self._adb_path = adb_path
-    self._adb_server_port = str(adb_server_port)
-    self._default_timeout = default_timeout
-    logging.info('adb_path: %r', self._adb_path)
+    self._config = config
+    logging.info('config: %r', self._config)
 
     # Unset problematic environment variables. ADB commands will fail if these
     # are set. They are normally exported by AndroidStudio.
@@ -54,14 +40,25 @@ class AdbController:
     if 'ANDROID_ADB_SERVER_PORT' in os.environ:
       del os.environ['ANDROID_ADB_SERVER_PORT']
 
-  def command_prefix(self, include_device_name: bool = True) -> List[str]:
+    # Explicitly expand the $HOME environment variable.
+    self._os_env_vars = dict(os.environ).copy()
+    self._os_env_vars.update(
+        {'HOME': os.path.expandvars(self._os_env_vars.get('HOME', ''))}
+    )
+    logging.info('self._os_env_vars: %r', self._os_env_vars)
+
+  def command_prefix(self, include_device_name: bool = True) -> list[str]:
     """The command for instantiating an adb client to this server."""
-    command_prefix = [self._adb_path, '-P', self._adb_server_port]
+    command_prefix = [
+        self._config.adb_path,
+        '-P',
+        str(self._config.adb_server_port),
+    ]
     if include_device_name:
-      command_prefix.extend(['-s', self._device_name])
+      command_prefix.extend(['-s', self._config.device_name])
     return command_prefix
 
-  def init_server(self, timeout: Optional[float] = None):
+  def init_server(self, timeout: float | None = None):
     """Initialize the ADB server deamon on the given port.
 
     This function should be called immediately after initializing the first
@@ -75,7 +72,7 @@ class AdbController:
     self.execute_command(['devices'], timeout, device_specific=False)
     time.sleep(0.2)
 
-  def _restart_server(self, timeout: Optional[float] = None):
+  def _restart_server(self, timeout: float | None = None):
     """Kills and restarts the adb server.
 
     Args:
@@ -94,10 +91,12 @@ class AdbController:
         ['devices'], timeout=timeout, device_specific=False)
     time.sleep(0.2)
 
-  def execute_command(self,
-                      args: List[str],
-                      timeout: Optional[float] = None,
-                      device_specific: bool = True) -> bytes:
+  def execute_command(
+      self,
+      args: list[str],
+      timeout: float | None = None,
+      device_specific: bool = True,
+  ) -> bytes:
     """Executes an adb command.
 
     Args:
@@ -110,17 +109,22 @@ class AdbController:
     Returns:
       The output of running such command as a binary string.
     """
-    timeout = self._default_timeout if timeout is None else timeout
+    timeout = self._config.default_timeout if timeout is None else timeout
     command = self.command_prefix(include_device_name=device_specific) + args
     command_str = 'adb ' + ' '.join(command[1:])
 
+    n_retries = 2
     n_tries = 1
     latest_error = None
-    while n_tries < 3:
+    while n_tries <= n_retries:
       try:
         logging.info('Executing ADB command: [%s]', command_str)
         cmd_output = subprocess.check_output(
-            command, stderr=subprocess.STDOUT, timeout=timeout)
+            command,
+            stderr=subprocess.STDOUT,
+            timeout=timeout,
+            env=self._os_env_vars,
+        )
         logging.debug('ADB command output: %s', cmd_output)
         return cmd_output
       except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
@@ -137,7 +141,7 @@ class AdbController:
             logging.error('    %s', line)
         n_tries += 1
         latest_error = e
-        if device_specific:
+        if device_specific and n_tries <= n_retries:
           self._restart_server(timeout=timeout)
 
     raise errors.AdbControllerError(

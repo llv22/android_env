@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 """A base class for talking to different types of Android simulators."""
 
 import abc
-from typing import List, Tuple
 
 from absl import logging
 from android_env.components import adb_controller
@@ -24,21 +23,6 @@ from android_env.components import errors
 from android_env.components import log_stream
 from android_env.proto import state_pb2
 import numpy as np
-
-
-def _print_logs_on_exception(func):
-  """Decorator function for printing simulator logs upon any exception."""
-  def wrapper(*args, **kwargs):
-    try:
-      return func(*args, **kwargs)
-    except Exception as error:
-      # Calls self.get_logs since self is the first arg.
-      for line in args[0].get_logs().splitlines():
-        logging.error(line)
-      raise errors.SimulatorError(
-          'Exception caught in simulator. Please see the simulator logs '
-          'above for more details.') from error
-  return wrapper
 
 
 class BaseSimulator(metaclass=abc.ABCMeta):
@@ -76,19 +60,26 @@ class BaseSimulator(metaclass=abc.ABCMeta):
   def create_log_stream(self) -> log_stream.LogStream:
     """Creates a stream of logs from the simulator."""
 
-  @_print_logs_on_exception
   def launch(self) -> None:
     """Starts the simulator."""
 
     self._num_launch_attempts += 1
-    self._launch_impl()
+    try:
+      self._launch_impl()
+    except Exception as error:
+      for line in self.get_logs().splitlines():
+        logging.error(line)
+      raise errors.SimulatorError(
+          'Exception caught in simulator. Please see the simulator logs '
+          'above for more details.'
+      ) from error
 
   @abc.abstractmethod
   def _launch_impl(self) -> None:
     """Platform specific launch implementation."""
 
   @abc.abstractmethod
-  def send_touch(self, touches: List[Tuple[int, int, bool, int]]) -> None:
+  def send_touch(self, touches: list[tuple[int, int, bool, int]]) -> None:
     """Sends a touch event to be executed on the simulator.
 
     Args:

@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,59 +17,67 @@
 
 import os
 
+from absl import logging
 from android_env import environment
+from android_env.components import config_classes
 from android_env.components import coordinator as coordinator_lib
 from android_env.components import task_manager as task_manager_lib
 from android_env.components.simulators.emulator import emulator_simulator
+from android_env.components.simulators.fake import fake_simulator
 from android_env.proto import task_pb2
 
 from google.protobuf import text_format
 
 
-def load(task_path: str,
-         avd_name: str,
-         android_avd_home: str = '~/.android/avd',
-         android_sdk_root: str = '~/Android/Sdk',
-         emulator_path: str = '~/Android/Sdk/emulator/emulator',
-         adb_path: str = '~/Android/Sdk/platform-tools/adb',
-         run_headless: bool = False) -> environment.AndroidEnv:
-  """Loads an AndroidEnv instance.
+def _load_task(task_config: config_classes.TaskConfig) -> task_pb2.Task:
+  """Returns the task according to `task_config`."""
 
-  Args:
-    task_path: Path to the task textproto file.
-    avd_name: Name of the AVD (Android Virtual Device).
-    android_avd_home: Path to the AVD (Android Virtual Device).
-    android_sdk_root: Root directory of the SDK.
-    emulator_path: Path to the emulator binary.
-    adb_path: Path to the ADB (Android Debug Bridge).
-    run_headless: If True, the emulator display is turned off.
-  Returns:
-    env: An AndroidEnv instance.
-  """
-
-  # Create simulator.
-  simulator = emulator_simulator.EmulatorSimulator(
-      adb_controller_args=dict(
-          adb_path=os.path.expanduser(adb_path),
-          adb_server_port=5037,
-      ),
-      emulator_launcher_args=dict(
-          avd_name=avd_name,
-          android_avd_home=os.path.expanduser(android_avd_home),
-          android_sdk_root=os.path.expanduser(android_sdk_root),
-          emulator_path=os.path.expanduser(emulator_path),
-          run_headless=run_headless,
-          gpu_mode='swiftshader_indirect',
-      ),
-  )
-
-  # Prepare task.
   task = task_pb2.Task()
-  with open(task_path, 'r') as proto_file:
-    text_format.Parse(proto_file.read(), task)
+  match task_config:
+    case config_classes.FilesystemTaskConfig():
+      with open(task_config.path, 'r') as proto_file:
+        text_format.Parse(proto_file.read(), task)
+    case _:
+      logging.error('Unsupported TaskConfig: %r', task_config)
 
+  return task
+
+
+def load(config: config_classes.AndroidEnvConfig) -> environment.AndroidEnv:
+  """Loads an AndroidEnv instance."""
+
+  task = _load_task(config.task)
   task_manager = task_manager_lib.TaskManager(task)
-  coordinator = coordinator_lib.Coordinator(simulator, task_manager)
 
-  # Load environment.
+  match config.simulator:
+    case config_classes.EmulatorConfig():
+      _process_emulator_launcher_config(config.simulator)
+      simulator = emulator_simulator.EmulatorSimulator(config=config.simulator)
+    case config_classes.FakeSimulatorConfig():
+      simulator = fake_simulator.FakeSimulator(config=config.simulator)
+    case _:
+      raise ValueError('Unsupported simulator config: {config.simulator}')
+
+  coordinator = coordinator_lib.Coordinator(simulator, task_manager)
   return environment.AndroidEnv(coordinator=coordinator)
+
+
+def _process_emulator_launcher_config(
+    emulator_config: config_classes.EmulatorConfig,
+) -> None:
+  """Adjusts the configuration of the emulator depending on some conditions."""
+
+  # Expand the user directory if specified.
+  launcher_config = emulator_config.emulator_launcher
+  launcher_config.android_avd_home = os.path.expanduser(
+      launcher_config.android_avd_home
+  )
+  launcher_config.android_sdk_root = os.path.expanduser(
+      launcher_config.android_sdk_root
+  )
+  launcher_config.emulator_path = os.path.expanduser(
+      launcher_config.emulator_path
+  )
+  emulator_config.adb_controller.adb_path = os.path.expanduser(
+      emulator_config.adb_controller.adb_path
+  )

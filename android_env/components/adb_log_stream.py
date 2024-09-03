@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 """Class for a stream of logs output by a locally running emulator."""
 
 import subprocess
-from typing import List
 
 from absl import logging
 from android_env.components import log_stream
@@ -28,8 +27,8 @@ _LOGCAT_COMMAND = ['logcat', '-v', 'epoch']
 class AdbLogStream(log_stream.LogStream):
   """Manages adb logcat process for a locally running emulator."""
 
-  def __init__(self, adb_command_prefix: List[str], *args, **kwargs):
-    super().__init__(*args, **kwargs)
+  def __init__(self, adb_command_prefix: list[str], verbose: bool = False):
+    super().__init__(verbose=verbose)
     self._adb_command_prefix = adb_command_prefix
 
   def _get_stream_output(self):

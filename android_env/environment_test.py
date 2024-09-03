@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -41,9 +41,6 @@ def _create_mock_coordinator() -> coordinator_lib.Coordinator:
       'timedelta': dm_env.specs.Array(shape=(), dtype=np.int64),
       'orientation': dm_env.specs.Array(shape=(4,), dtype=np.uint8),
   }
-  coordinator.task_extras_spec.return_value = {
-      'click': dm_env.specs.Array(shape=(), dtype=np.int64),
-  }
   return coordinator
 
 
@@ -79,12 +76,6 @@ class AndroidEnvTest(absltest.TestCase):
                           dm_env.specs.Array)
     self.assertEqual(env.observation_spec()['orientation'].shape, (4,))
 
-    # Check extras spec.
-    self.assertNotEmpty(env.task_extras_spec())
-    self.assertIn('click', env.task_extras_spec())
-    self.assertEqual(env.task_extras_spec()['click'].shape, ())
-    self.assertEqual(env.task_extras_spec()['click'].dtype, np.int64)
-
   def test_reset_and_step(self):
     coordinator = mock.create_autospec(coordinator_lib.Coordinator)
     coordinator.action_spec.return_value = {
@@ -98,9 +89,6 @@ class AndroidEnvTest(absltest.TestCase):
         'pixels': dm_env.specs.Array(shape=(123, 456, 3), dtype=np.uint8),
         'timedelta': dm_env.specs.Array(shape=(), dtype=np.int64),
         'orientation': dm_env.specs.Array(shape=(4,), dtype=np.uint8),
-    }
-    coordinator.task_extras_spec.return_value = {
-        'click': dm_env.specs.Array(shape=(1,), dtype=np.int64),
     }
     env = environment.AndroidEnv(coordinator)
     coordinator.rl_reset.return_value = dm_env.TimeStep(
@@ -237,15 +225,6 @@ class AndroidEnvTest(absltest.TestCase):
     response = env.save_state(request)
     self.assertEqual(response, expected_response)
     coordinator.save_state.assert_called_once_with(request)
-
-  def test_update_task(self):
-    coordinator = _create_mock_coordinator()
-    env = environment.AndroidEnv(coordinator)
-    task = task_pb2.Task()
-    coordinator.update_task.return_value = True
-    response = env.update_task(task)
-    self.assertEqual(response, True)
-    coordinator.update_task.assert_called_once_with(task)
 
   def test_double_close(self):
     coordinator = _create_mock_coordinator()

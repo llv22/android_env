@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,16 +16,18 @@
 """TaskManager handles all events and information related to the task."""
 
 import ast
+from collections.abc import Callable
 import copy
 import datetime
 import json
 import re
 import threading
-from typing import Any, Callable, Dict
+from typing import Any
 
 from absl import logging
 from android_env.components import adb_call_parser as adb_call_parser_lib
 from android_env.components import app_screen_checker
+from android_env.components import config_classes
 from android_env.components import dumpsys_thread
 from android_env.components import log_stream as log_stream_lib
 from android_env.components import logcat_thread
@@ -41,28 +43,18 @@ class TaskManager:
   def __init__(
       self,
       task: task_pb2.Task,
-      max_bad_states: int = 3,
-      dumpsys_check_frequency: int = 150,
-      max_failed_current_activity: int = 10,
+      config: config_classes.TaskManagerConfig | None = None,
   ):
     """Controls task-relevant events and information.
 
     Args:
       task: A task proto defining the RL task.
-      max_bad_states: How many bad states in a row are allowed before a restart
-        of the simulator is triggered.
-      dumpsys_check_frequency: Frequency, in steps, at which to check
-        current_activity and view hierarchy
-      max_failed_current_activity: The maximum number of tries for extracting
-        the current activity before forcing the episode to restart.
+      config: Configuration for this instance.
     """
-    self._task = task
-    self._max_bad_states = max_bad_states
-    self._dumpsys_check_frequency = dumpsys_check_frequency
-    self._max_failed_current_activity = max_failed_current_activity
 
+    self._task = task
+    self._config = config or config_classes.TaskManagerConfig()
     self._lock = threading.Lock()
-    self._extras_max_buffer_size = 100
     self._logcat_thread = None
     self._dumpsys_thread = None
     self._setup_step_interpreter = None
@@ -92,14 +84,7 @@ class TaskManager:
 
     logging.info('Task config: %s', self._task)
 
-  def task(self) -> task_pb2.Task:
-    return self._task
-
-  def update_task(self, task: task_pb2.Task) -> None:
-    self._stats['task_updates'] += 1
-    self._task = task
-
-  def stats(self) -> Dict[str, Any]:
+  def stats(self) -> dict[str, Any]:
     """Returns a dictionary of stats.
 
     This method is expected to be called after setup_task() has been called.
@@ -149,7 +134,7 @@ class TaskManager:
           'episode_end': False,
       }
 
-  def rl_reset(self, observation: Dict[str, Any]) -> dm_env.TimeStep:
+  def rl_reset(self, observation: dict[str, Any]) -> dm_env.TimeStep:
     """Performs one RL step."""
 
     self._stats['episode_steps'] = 0
@@ -166,7 +151,7 @@ class TaskManager:
         discount=0.0,
         observation=observation)
 
-  def rl_step(self, observation: Dict[str, Any]) -> dm_env.TimeStep:
+  def rl_step(self, observation: dict[str, Any]) -> dm_env.TimeStep:
     """Performs one RL step."""
 
     self._stats['episode_steps'] += 1
@@ -187,7 +172,7 @@ class TaskManager:
     self._latest_values['reward'] = 0.0
     return reward
 
-  def _get_current_extras(self) -> Dict[str, Any]:
+  def _get_current_extras(self) -> dict[str, Any]:
     """Returns task extras accumulated since the last step."""
     extras = {}
     for name, values in self._latest_values['extra'].items():
@@ -248,9 +233,11 @@ class TaskManager:
     self._dumpsys_thread = dumpsys_thread.DumpsysThread(
         app_screen_checker=app_screen_checker.AppScreenChecker(
             adb_call_parser=adb_call_parser,
-            expected_app_screen=self._task.expected_app_screen),
-        check_frequency=self._dumpsys_check_frequency,
-        max_failed_current_activity=self._max_failed_current_activity)
+            expected_app_screen=self._task.expected_app_screen,
+        ),
+        check_frequency=self._config.dumpsys_check_frequency,
+        max_failed_current_activity=self._config.max_failed_current_activity,
+    )
 
   def _stop_logcat_thread(self):
     if self._logcat_thread is not None:
@@ -266,11 +253,11 @@ class TaskManager:
     to a good state.
     """
     logging.warning('Bad state detected.')
-    if self._max_bad_states:
+    if self._config.max_bad_states:
       self._is_bad_episode = True
       self._bad_state_counter += 1
       logging.warning('Bad state counter: %d.', self._bad_state_counter)
-      if self._bad_state_counter >= self._max_bad_states:
+      if self._bad_state_counter >= self._config.max_bad_states:
         logging.error('Too many consecutive bad states. Restarting simulator.')
         self._stats['restart_count_max_bad_states'] += 1
         self._should_restart = True
@@ -380,7 +367,10 @@ class TaskManager:
         latest_extras = self._latest_values['extra']
         if extra_name in latest_extras:
           # If latest extra is not flushed, append.
-          if len(latest_extras[extra_name]) >= self._extras_max_buffer_size:
+          if (
+              len(latest_extras[extra_name])
+              >= self._config.extras_max_buffer_size
+          ):
             latest_extras[extra_name].pop(0)
           latest_extras[extra_name].append(extra)
         else:

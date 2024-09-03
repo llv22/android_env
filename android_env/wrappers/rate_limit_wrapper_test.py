@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 """Tests for rate_limit_wrapper."""
 
 import time
-from typing import Any, List, Protocol
+from typing import Any, Protocol
 from unittest import mock
 
 from absl.testing import absltest
@@ -51,7 +51,7 @@ class _FnWithTimestamps(Protocol):
   """A function with `timestamp` and `timestamps` attributes."""
 
   timestamp: float
-  timestamps: List[float]
+  timestamps: list[float]
 
 
 def _with_timestamp(fn: Any) -> _FnWithTimestamps:

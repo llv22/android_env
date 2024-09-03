@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,13 +15,12 @@
 
 """Base class for AndroidEnv wrappers."""
 
-from typing import Any, Dict
+from typing import Any
 
 from absl import logging
 from android_env import env_interface
 from android_env.proto import adb_pb2
 from android_env.proto import state_pb2
-from android_env.proto import task_pb2
 import dm_env
 from dm_env import specs
 import numpy as np
@@ -43,7 +42,7 @@ class BaseWrapper(env_interface.AndroidEnvInterface):
     action = self._process_action(action)
     return self._process_timestep(self._env.step(action))
 
-  def task_extras(self, latest_only: bool = True) -> Dict[str, np.ndarray]:
+  def task_extras(self, latest_only: bool = True) -> dict[str, np.ndarray]:
     return self._env.task_extras(latest_only=latest_only)
 
   def _reset_state(self):
@@ -55,10 +54,10 @@ class BaseWrapper(env_interface.AndroidEnvInterface):
   def _process_timestep(self, timestep: dm_env.TimeStep) -> dm_env.TimeStep:
     return timestep
 
-  def observation_spec(self) -> Dict[str, specs.Array]:
+  def observation_spec(self) -> dict[str, specs.Array]:
     return self._env.observation_spec()
 
-  def action_spec(self) -> Dict[str, specs.Array]:
+  def action_spec(self) -> dict[str, specs.Array]:
     return self._env.action_spec()
 
   def reward_spec(self) -> specs.Array:
@@ -67,14 +66,11 @@ class BaseWrapper(env_interface.AndroidEnvInterface):
   def discount_spec(self) -> specs.Array:
     return self._env.discount_spec()
 
-  def task_extras_spec(self) -> Dict[str, specs.Array]:
-    return self._env.task_extras_spec()
-
-  def _wrapper_stats(self) -> Dict[str, Any]:
+  def _wrapper_stats(self) -> dict[str, Any]:
     """Add wrapper specific logging here."""
     return {}
 
-  def stats(self) -> Dict[str, Any]:
+  def stats(self) -> dict[str, Any]:
     info = self._env.stats()
     info.update(self._wrapper_stats())
     return info
@@ -103,9 +99,6 @@ class BaseWrapper(env_interface.AndroidEnvInterface):
   def execute_adb_call(self,
                        adb_call: adb_pb2.AdbRequest) -> adb_pb2.AdbResponse:
     return self._env.execute_adb_call(adb_call)
-
-  def update_task(self, task: task_pb2.Task) -> bool:
-    return self._env.update_task(task)
 
   @property
   def raw_action(self):

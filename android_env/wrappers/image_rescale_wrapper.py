@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 
 """Wraps the AndroidEnv environment to rescale the observations."""
 
-from typing import Optional, Sequence, Dict
+from collections.abc import Sequence
 
 from android_env.wrappers import base_wrapper
 import dm_env
@@ -37,8 +37,9 @@ class ImageRescaleWrapper(base_wrapper.BaseWrapper):
   def __init__(
       self,
       env: dm_env.Environment,
-      zoom_factors: Optional[Sequence[float]] = (0.5, 0.5),
-      grayscale: bool = False):
+      zoom_factors: Sequence[float] | None = (0.5, 0.5),
+      grayscale: bool = False,
+  ):
     super().__init__(env)
     assert 'pixels' in self._env.observation_spec()
     assert self._env.observation_spec()['pixels'].shape[-1] in [1, 3], (
@@ -70,14 +71,16 @@ class ImageRescaleWrapper(base_wrapper.BaseWrapper):
     return self._resize_image_array(image, new_shape)
 
   def _resize_image_array(
-      self,
-      grayscale_or_rbg_array: np.ndarray,
-      new_shape: Sequence[int]) -> np.ndarray:
+      self, grayscale_or_rbg_array: np.ndarray, new_shape: np.ndarray
+  ) -> np.ndarray:
     """Resize color or grayscale/action_layer array to new_shape."""
-    assert np.array(new_shape).ndim == 1
+    assert new_shape.ndim == 1
     assert len(new_shape) == 2
-    resized_array = np.array(Image.fromarray(
-        grayscale_or_rbg_array.astype('uint8')).resize(new_shape))
+    resized_array = np.array(
+        Image.fromarray(grayscale_or_rbg_array.astype('uint8')).resize(
+            tuple(new_shape)
+        )
+    )
     if resized_array.ndim == 2:
       return np.expand_dims(resized_array, axis=-1)
     return resized_array
@@ -90,7 +93,7 @@ class ImageRescaleWrapper(base_wrapper.BaseWrapper):
     timestep = self._env.step(action)
     return self._process_timestep(timestep)
 
-  def observation_spec(self) -> Dict[str, specs.Array]:
+  def observation_spec(self) -> dict[str, specs.Array]:
     parent_spec = self._env.observation_spec().copy()
     out_shape = np.multiply(parent_spec['pixels'].shape,
                             self._zoom_factors).astype(np.int32)

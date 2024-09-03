@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,20 +15,18 @@
 
 """A class that launches a thread to read Android log outputs."""
 
+from collections.abc import Callable
 import re
 import threading
-# `typing.Pattern` has been deprecated in Python 3.9 in favor of `re.Pattern`,
-# but it is not available even in slightly older Python versions.
-# Please see https://www.python.org/dev/peps/pep-0585/
-from typing import Callable, Match, NamedTuple, Pattern
+from typing import NamedTuple
 
 from absl import logging
 from android_env.components import log_stream as log_stream_lib
 
 
 class EventListener(NamedTuple):
-  regexp: Pattern[str]
-  handler_fn: Callable[[Pattern[str], Match[str]], None]
+  regexp: re.Pattern[str]
+  handler_fn: Callable[[re.Pattern[str], re.Match[str]], None]
 
 
 class LogcatThread:

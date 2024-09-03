@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ from absl import logging
 from absl.testing import absltest
 from android_env import env_interface
 from android_env.proto import state_pb2
-from android_env.proto import task_pb2
 from android_env.wrappers import base_wrapper
 
 
@@ -59,11 +58,6 @@ class BaseWrapperTest(absltest.TestCase):
     self.assertEqual(fake_action_spec, wrapped_env.action_spec())
     base_env.action_spec.assert_called_once()
 
-    fake_task_extras_spec = 'fake_task_extras_spec'
-    base_env.task_extras_spec.return_value = fake_task_extras_spec
-    self.assertEqual(fake_task_extras_spec, wrapped_env.task_extras_spec())
-    base_env.task_extras_spec.assert_called_once()
-
     fake_raw_action = 'fake_raw_action'
     type(base_env).raw_action = mock.PropertyMock(return_value=fake_raw_action)
     self.assertEqual(fake_raw_action, wrapped_env.raw_action)
@@ -88,11 +82,6 @@ class BaseWrapperTest(absltest.TestCase):
     base_env.save_state.return_value = expected_response
     self.assertEqual(wrapped_env.save_state(save_request), expected_response)
     base_env.save_state.assert_called_once_with(save_request)
-
-    task = task_pb2.Task(id='my_task')
-    base_env.update_task.return_value = False
-    self.assertFalse(wrapped_env.update_task(task))
-    base_env.update_task.assert_called_once_with(task)
 
     wrapped_env.close()
     base_env.close.assert_called_once()

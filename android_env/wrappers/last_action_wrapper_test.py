@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 
 """Tests for android_env.wrappers.last_action_wrapper."""
 
-from typing import Any, Dict
+from typing import Any
 from unittest import mock
 
 from absl.testing import absltest

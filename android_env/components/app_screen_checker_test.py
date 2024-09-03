@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 """Tests for android_env.components.app_screen_checker."""
 
 import re
-from typing import List
 from unittest import mock
 
 from absl.testing import absltest
@@ -27,9 +26,9 @@ from android_env.proto import adb_pb2
 from android_env.proto import task_pb2
 
 
-def _flatten_tree(tree: app_screen_checker._DumpsysNode,
-                  flat_tree: List[str],
-                  indent: int = 2):
+def _flatten_tree(
+    tree: app_screen_checker._DumpsysNode, flat_tree: list[str], indent: int = 2
+):
   """Appends a list of strings to `flat_tree` from `tree`."""
   flat_tree.append(' ' * indent + tree.data)
   for c in tree.children:

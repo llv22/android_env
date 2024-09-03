@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,11 +20,10 @@ extra methods that clients may use for extended functionality.
 """
 
 import abc
-from typing import Any, Dict
+from typing import Any
 
 from android_env.proto import adb_pb2
 from android_env.proto import state_pb2
-from android_env.proto import task_pb2
 import dm_env
 import numpy as np
 
@@ -35,11 +34,11 @@ class AndroidEnvInterface(dm_env.Environment, metaclass=abc.ABCMeta):
   # Methods required by dm_env.Environment.
 
   @abc.abstractmethod
-  def action_spec(self) -> Dict[str, dm_env.specs.Array]:
+  def action_spec(self) -> dict[str, dm_env.specs.Array]:
     """Returns the action specification."""
 
   @abc.abstractmethod
-  def observation_spec(self) -> Dict[str, dm_env.specs.Array]:
+  def observation_spec(self) -> dict[str, dm_env.specs.Array]:
     """Returns the observation specification."""
 
   @abc.abstractmethod
@@ -47,8 +46,37 @@ class AndroidEnvInterface(dm_env.Environment, metaclass=abc.ABCMeta):
     """Resets the current episode."""
 
   @abc.abstractmethod
-  def step(self, action: Dict[str, np.ndarray]) -> dm_env.TimeStep:
+  def step(self, action: dict[str, np.ndarray]) -> dm_env.TimeStep:
     """Executes `action` and returns a `TimeStep`."""
+
+  @abc.abstractmethod
+  def close(self) -> None:
+    """Frees up resources."""
+
+  # Extensions provided by AndroidEnv.
+
+  def task_extras(self, latest_only: bool = True) -> dict[str, np.ndarray]:
+    """Returns extra info provided by tasks."""
+
+    return {}
+
+  @property
+  def raw_action(self):
+    """Returns the latest action."""
+
+  @property
+  def raw_observation(self):
+    """Returns the latest observation."""
+
+  def stats(self) -> dict[str, Any]:
+    """Returns information generated inside the implementation."""
+
+    return {}
+
+  def execute_adb_call(self, call: adb_pb2.AdbRequest) -> adb_pb2.AdbResponse:
+    """Executes `call` and returns its response."""
+
+    return adb_pb2.AdbResponse()
 
   def load_state(
       self, request: state_pb2.LoadStateRequest
@@ -79,51 +107,3 @@ class AndroidEnvInterface(dm_env.Environment, metaclass=abc.ABCMeta):
       applicable), and any other relevant information.
     """
     raise NotImplementedError('This environment does not support saving state')
-
-  @abc.abstractmethod
-  def close(self) -> None:
-    """Frees up resources."""
-
-  # Extensions provided by AndroidEnv.
-
-  def task_extras_spec(self) -> Dict[str, dm_env.specs.Array]:
-    """Returns the specification for extra info provided by tasks."""
-
-    return {}
-
-  def task_extras(self, latest_only: bool = True) -> Dict[str, np.ndarray]:
-    """Returns extra info provided by tasks."""
-
-    return {}
-
-  @property
-  def raw_action(self):
-    """Returns the latest action."""
-
-  @property
-  def raw_observation(self):
-    """Returns the latest observation."""
-
-  def stats(self) -> Dict[str, Any]:
-    """Returns information generated inside the implementation."""
-
-    return {}
-
-  def execute_adb_call(self, call: adb_pb2.AdbRequest) -> adb_pb2.AdbResponse:
-    """Executes `call` and returns its response."""
-
-    return adb_pb2.AdbResponse()
-
-  def update_task(self, task: task_pb2.Task) -> bool:
-    """Replaces the current task with a new task.
-
-    It is the caller's responsibility to call `reset()` after the task update.
-
-    Args:
-      task: A new task to replace the current one.
-
-    Returns:
-      A bool indicating the success of the task setup.
-    """
-
-    return True

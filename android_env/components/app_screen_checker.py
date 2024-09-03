@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,13 +15,13 @@
 
 """Determines if the current app screen matches an expected app screen."""
 
+from collections.abc import Callable, Sequence
 import enum
 import re
 import time
-from typing import Callable, List, Optional, Sequence, Pattern
+from typing import Self
 
 from absl import logging
-
 from android_env.components import adb_call_parser as adb_call_parser_lib
 from android_env.components import errors
 from android_env.proto import adb_pb2
@@ -31,7 +31,7 @@ from android_env.proto import task_pb2
 class _DumpsysNode:
   """A node in a dumpsys tree."""
 
-  def __init__(self, data: Optional[str] = None):
+  def __init__(self, data: str | None = None):
     self._children = []
     self._data = data
 
@@ -40,12 +40,12 @@ class _DumpsysNode:
     return self._data
 
   @property
-  def children(self) -> List['_DumpsysNode']:
+  def children(self) -> list[Self]:
     return self._children
 
-  def find_child(self,
-                 predicate: Callable[['_DumpsysNode'], bool],
-                 max_levels: int = 0) -> Optional['_DumpsysNode']:
+  def find_child(
+      self, predicate: Callable[[Self], bool], max_levels: int = 0
+  ) -> Self | None:
     """Returns the first direct child that matches `predicate`, None otherwise.
 
     Args:
@@ -126,9 +126,11 @@ def build_tree_from_dumpsys_output(dumpsys_output: str) -> _DumpsysNode:
   return root
 
 
-def matches_path(dumpsys_activity_output: str,
-                 expected_view_hierarchy_path: Sequence[Pattern[str]],
-                 max_levels: int = 0) -> bool:
+def matches_path(
+    dumpsys_activity_output: str,
+    expected_view_hierarchy_path: Sequence[re.Pattern[str]],
+    max_levels: int = 0,
+) -> bool:
   """Returns True if the current dumpsys output matches the expected path.
 
   Args:

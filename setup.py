@@ -1,4 +1,4 @@
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,18 +14,14 @@
 
 """Simple package definition for using with `pip`."""
 
-from distutils import cmd
 import os
 
 import pkg_resources
+import setuptools
 from setuptools import find_packages
 from setuptools import setup
 from setuptools.command.build_ext import build_ext
 from setuptools.command.build_py import build_py
-
-description = """AndroidEnv
-Read the README at https://github.com/deepmind/android_env for more information.
-"""
 
 _ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -38,18 +34,25 @@ _ANDROID_ENV_PROTOS = (
     'android_env/proto/snapshot_service.proto',
     'android_env/proto/state.proto',
     'android_env/proto/task.proto',
+    'android_env/proto/a11y/a11y.proto',
+    'android_env/proto/a11y/android_accessibility_action.proto',
+    'android_env/proto/a11y/android_accessibility_forest.proto',
+    'android_env/proto/a11y/android_accessibility_node_info.proto',
+    'android_env/proto/a11y/android_accessibility_node_info_clickable_span.proto',
+    'android_env/proto/a11y/android_accessibility_tree.proto',
+    'android_env/proto/a11y/android_accessibility_window_info.proto',
+    'android_env/proto/a11y/rect.proto',
 )
 
 testing_requirements = [
     'attrs==20.3.0',  # temporary pin to fix pytype issue.
     'pillow',
     'pytype',
-    'pytest-xdist',
     'gym',
 ]
 
 
-class _GenerateProtoFiles(cmd.Command):
+class _GenerateProtoFiles(setuptools.Command):
   """Command to generate protobuf bindings for AndroidEnv protos."""
 
   descriptions = 'Generates Python protobuf bindings for AndroidEnv protos.'
@@ -98,32 +101,10 @@ class _BuildPy(build_py):
     build_py.run(self)
 
 setup(
-    name='android_env',
-    version='1.1.0',
-    description='AndroidEnv environment and library for training agents.',
-    long_description=description,
-    author='DeepMind',
-    license='Apache License, Version 2.0',
-    keywords='Android OS reinforcement-learning',
-    url='https://github.com/deepmind/android_env',
     packages=find_packages(exclude=['examples']),
-    setup_requires=[
-        'grpcio-tools',
-    ],
-    install_requires=[
-        'absl-py>=0.1.0',
-        'dm_env',
-        'grpcio',
-        'numpy>=1.21',
-        'portpicker>=1.2.0',
-        'protobuf>=2.6',
-        'pygame',
-    ],
-    extras_require={
-        'acme': ['dm-acme'],
-        'gym': ['gym'],
-        'testing': testing_requirements,
-    },
+    package_data={'': ['proto/*.proto']},  # Copy protobuf files.
+    include_package_data=True,
+    setup_requires=['grpcio-tools'],
     cmdclass={
         'build_ext': _BuildExt,
         'build_py': _BuildPy,

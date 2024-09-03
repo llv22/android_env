@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 
 """Wraps the AndroidEnv environment to provide discrete actions."""
 
-from typing import Optional, Sequence, Dict
+from collections.abc import Sequence
 
 from android_env.components import action_type
 from android_env.wrappers import base_wrapper
@@ -24,23 +24,24 @@ from dm_env import specs
 import numpy as np
 
 
-NOISE_CLIP_VALUE = 0.4999
+_NOISE_CLIP_VALUE = 0.4999
 
 
 class DiscreteActionWrapper(base_wrapper.BaseWrapper):
   """AndroidEnv with discrete actions."""
 
-  def __init__(self,
-               env: dm_env.Environment,
-               action_grid: Optional[Sequence[int]] = (10, 10),
-               redundant_actions: bool = True,
-               noise: float = 0.1):
-
+  def __init__(
+      self,
+      env: dm_env.Environment,
+      action_grid: Sequence[int] = (10, 10),
+      redundant_actions: bool = True,
+      noise: float = 0.1,
+  ):
     super().__init__(env)
     self._parent_action_spec = self._env.action_spec()
     self._assert_base_env()
     self._action_grid = action_grid  # [height, width]
-    self._grid_size = np.product(self._action_grid)
+    self._grid_size = np.prod(self._action_grid)
     self._num_action_types = self._parent_action_spec['action_type'].num_values
     self._redundant_actions = redundant_actions
     self._noise = noise
@@ -57,16 +58,16 @@ class DiscreteActionWrapper(base_wrapper.BaseWrapper):
     """Number of discrete actions."""
 
     if self._redundant_actions:
-      return np.product(self._action_grid) * self._num_action_types
+      return self._grid_size * self._num_action_types
     else:
-      return np.product(self._action_grid) + self._num_action_types - 1
+      return self._grid_size + self._num_action_types - 1
 
-  def step(self, action: Dict[str, int]) -> dm_env.TimeStep:
+  def step(self, action: dict[str, int]) -> dm_env.TimeStep:
     """Take a step in the base environment."""
 
     return self._env.step(self._process_action(action))
 
-  def _process_action(self, action: Dict[str, int]) -> Dict[str, np.ndarray]:
+  def _process_action(self, action: dict[str, int]) -> dict[str, np.ndarray]:
     """Transforms action so that it agrees with AndroidEnv's action spec."""
 
     return {
@@ -133,8 +134,8 @@ class DiscreteActionWrapper(base_wrapper.BaseWrapper):
     noise_y = np.random.normal(loc=0.0, scale=self._noise)
 
     # Noise is clipped so that the action will strictly stay in the cell.
-    noise_x = max(min(noise_x, NOISE_CLIP_VALUE), -NOISE_CLIP_VALUE)
-    noise_y = max(min(noise_y, NOISE_CLIP_VALUE), -NOISE_CLIP_VALUE)
+    noise_x = max(min(noise_x, _NOISE_CLIP_VALUE), -_NOISE_CLIP_VALUE)
+    noise_y = max(min(noise_y, _NOISE_CLIP_VALUE), -_NOISE_CLIP_VALUE)
 
     x_pos = (x_pos_grid + 0.5 + noise_x) / self._action_grid[1]  # WIDTH
     y_pos = (y_pos_grid + 0.5 + noise_y) / self._action_grid[0]  # HEIGHT
@@ -149,7 +150,7 @@ class DiscreteActionWrapper(base_wrapper.BaseWrapper):
 
     return [x_pos, y_pos]
 
-  def action_spec(self) -> Dict[str, specs.Array]:
+  def action_spec(self) -> dict[str, specs.Array]:
     """Action spec of the wrapped environment."""
 
     return {

@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,12 +15,11 @@
 
 """Example script demonstrating usage of AndroidEnv."""
 
-from typing import Dict
 from absl import app
 from absl import flags
 from absl import logging
-
 from android_env import loader
+from android_env.components import config_classes
 from dm_env import specs
 import numpy as np
 
@@ -46,18 +45,26 @@ flags.DEFINE_integer('num_steps', 1000, 'Number of steps to take.')
 
 def main(_):
 
-  with loader.load(
-      emulator_path=FLAGS.emulator_path,
-      android_sdk_root=FLAGS.android_sdk_root,
-      android_avd_home=FLAGS.android_avd_home,
-      avd_name=FLAGS.avd_name,
-      adb_path=FLAGS.adb_path,
-      task_path=FLAGS.task_path,
-      run_headless=FLAGS.run_headless) as env:
+  config = config_classes.AndroidEnvConfig(
+      task=config_classes.FilesystemTaskConfig(path=FLAGS.task_path),
+      simulator=config_classes.EmulatorConfig(
+          emulator_launcher=config_classes.EmulatorLauncherConfig(
+              emulator_path=FLAGS.emulator_path,
+              android_sdk_root=FLAGS.android_sdk_root,
+              android_avd_home=FLAGS.android_avd_home,
+              avd_name=FLAGS.avd_name,
+              run_headless=FLAGS.run_headless,
+          ),
+          adb_controller=config_classes.AdbControllerConfig(
+              adb_path=FLAGS.adb_path
+          ),
+      ),
+  )
+  with loader.load(config) as env:
 
     action_spec = env.action_spec()
 
-    def get_random_action() -> Dict[str, np.ndarray]:
+    def get_random_action() -> dict[str, np.ndarray]:
       """Returns a random AndroidEnv action."""
       action = {}
       for k, v in action_spec.items():

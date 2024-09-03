@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,11 +20,12 @@ import socket
 import tempfile
 import threading
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from absl import logging
 from android_env.components import action_type as action_type_lib
 from android_env.components import adb_call_parser
+from android_env.components import config_classes
 from android_env.components import errors
 from android_env.components import specs
 from android_env.components import task_manager as task_manager_lib
@@ -32,7 +33,6 @@ from android_env.components import utils
 from android_env.components.simulators import base_simulator
 from android_env.proto import adb_pb2
 from android_env.proto import state_pb2
-from android_env.proto import task_pb2
 import dm_env
 import numpy as np
 
@@ -44,55 +44,20 @@ class Coordinator:
       self,
       simulator: base_simulator.BaseSimulator,
       task_manager: task_manager_lib.TaskManager,
-      num_fingers: int = 1,
-      interaction_rate_sec: float = 0.0,
-      enable_key_events: bool = False,
-      show_touches: bool = True,
-      show_pointer_location: bool = True,
-      show_status_bar: bool = False,
-      show_navigation_bar: bool = False,
-      periodic_restart_time_min: float = 0.0,
-      tmp_dir: Optional[str] = None,
+      config: config_classes.CoordinatorConfig | None = None,
   ):
     """Handles communication between AndroidEnv and its components.
 
     Args:
       simulator: A BaseSimulator instance.
       task_manager: The TaskManager, responsible for coordinating RL tasks.
-      num_fingers: Number of virtual fingers of the agent.
-      interaction_rate_sec: How often (in seconds) to fetch the screenshot from
-        the simulator (asynchronously). If <= 0, stepping the environment blocks
-        on fetching the screenshot (the environment is synchronous). If > 0,
-        screenshots are grabbed in a separate thread at this rate; stepping
-        returns the most recently grabbed screenshot.
-      enable_key_events: Whether keyboard key events are enabled.
-      show_touches: Whether to show circles on the screen indicating the
-        position of the current touch.
-      show_pointer_location: Whether to show blue lines on the screen indicating
-        the position of the current touch.
-      show_status_bar: Whether or not to show the status bar (at the top of the
-        screen, displays battery life, time, notifications etc.).
-      show_navigation_bar: Whether or not to show the navigation bar (at the
-        bottom of the screen, displayes BACK and HOME buttons, etc.)
-      periodic_restart_time_min: Time between periodic restarts in minutes. If >
-        0.0, will trigger a simulator restart at the end of the next episode
-        once the time has been reached.
-      tmp_dir: Temporary directory to write transient data.
     """
     self._simulator = simulator
     self._task_manager = task_manager
-    self._num_fingers = num_fingers
-    self._enable_key_events = enable_key_events
-    self._show_touches = show_touches
-    self._show_pointer_location = show_pointer_location
-    self._show_status_bar = show_status_bar
-    self._show_navigation_bar = show_navigation_bar
+    self._config = config or config_classes.CoordinatorConfig()
     self._adb_call_parser: adb_call_parser.AdbCallParser = None
-    self._periodic_restart_time_min = periodic_restart_time_min
-    self._tmp_dir = tmp_dir or tempfile.gettempdir()
     self._orientation = np.zeros(4, dtype=np.uint8)
-    self._interaction_rate_sec = interaction_rate_sec
-    self._interaction_thread = None
+    self._interaction_thread: InteractionThread | None = None
 
     # The size of the device screen in pixels (H x W).
     self._screen_size = np.array([0, 0], dtype=np.int32)
@@ -119,17 +84,15 @@ class Coordinator:
     logging.info('Starting the simulator...')
     self._launch_simulator()
 
-  def action_spec(self) -> Dict[str, dm_env.specs.Array]:
+  def action_spec(self) -> dict[str, dm_env.specs.Array]:
     return specs.base_action_spec(
-        num_fingers=self._num_fingers,
-        enable_key_events=self._enable_key_events)
+        num_fingers=self._config.num_fingers,
+        enable_key_events=self._config.enable_key_events,
+    )
 
-  def observation_spec(self) -> Dict[str, dm_env.specs.Array]:
+  def observation_spec(self) -> dict[str, dm_env.specs.Array]:
     return specs.base_observation_spec(
         height=self._screen_size[0], width=self._screen_size[1])
-
-  def task_extras_spec(self) -> Dict[str, dm_env.specs.Array]:
-    return specs.base_task_extras_spec(task=self._task_manager.task())
 
   def _update_screen_size(self) -> None:
     """Sets the screen size from a screenshot ignoring the color channel."""
@@ -167,7 +130,7 @@ class Coordinator:
         'action_type': np.array(action_type_lib.ActionType.LIFT),
         'touch_position': np.array([0, 0]),
     }
-    for i in range(2, self._num_fingers + 1):
+    for i in range(2, self._config.num_fingers + 1):
       lift_action.update({
           f'action_type_{i}': np.array(action_type_lib.ActionType.LIFT),
           f'touch_position_{i}': np.array([0, 0]),
@@ -186,10 +149,10 @@ class Coordinator:
       Boolean indicating if it is time to restart the simulator.
     """
 
-    if self._periodic_restart_time_min and self._simulator_start_time:
+    if self._config.periodic_restart_time_min and self._simulator_start_time:
       sim_alive_time = (time.time() - self._simulator_start_time) / 60.0
       logging.info('Simulator has been running for %f mins', sim_alive_time)
-      if sim_alive_time > self._periodic_restart_time_min:
+      if sim_alive_time > self._config.periodic_restart_time_min:
         logging.info('Maximum alive time reached. Restarting simulator.')
         self._stats['relaunch_count_periodic'] += 1
         return True
@@ -255,9 +218,10 @@ class Coordinator:
       self._simulator_healthy = True
       self._stats['relaunch_count'] += 1
       break
-    if self._interaction_rate_sec > 0:
-      self._interaction_thread = InteractionThread(self._simulator,
-                                                   self._interaction_rate_sec)
+    if self._config.interaction_rate_sec > 0:
+      self._interaction_thread = InteractionThread(
+          self._simulator, self._config.interaction_rate_sec
+      )
       self._interaction_thread.start()
 
   def _update_settings(self) -> None:
@@ -270,19 +234,27 @@ class Coordinator:
                 name_space=adb_pb2.AdbRequest.SettingsRequest.Namespace.SYSTEM,
                 put=adb_pb2.AdbRequest.SettingsRequest.Put(
                     key='show_touches',
-                    value='1' if self._show_touches else '0'))))
+                    value='1' if self._config.show_touches else '0',
+                ),
+            )
+        )
+    )
     self._adb_call_parser.parse(
         adb_pb2.AdbRequest(
             settings=adb_pb2.AdbRequest.SettingsRequest(
                 name_space=adb_pb2.AdbRequest.SettingsRequest.Namespace.SYSTEM,
                 put=adb_pb2.AdbRequest.SettingsRequest.Put(
                     key='pointer_location',
-                    value='1' if self._show_pointer_location else '0'))))
-    if self._show_navigation_bar and self._show_status_bar:
+                    value='1' if self._config.show_pointer_location else '0',
+                ),
+            )
+        )
+    )
+    if self._config.show_navigation_bar and self._config.show_status_bar:
       policy_control_value = 'null*'
-    elif self._show_navigation_bar and not self._show_status_bar:
+    elif self._config.show_navigation_bar and not self._config.show_status_bar:
       policy_control_value = 'immersive.status=*'
-    elif not self._show_navigation_bar and self._show_status_bar:
+    elif not self._config.show_navigation_bar and self._config.show_status_bar:
       policy_control_value = 'immersive.navigation=*'
     else:
       policy_control_value = 'immersive.full=*'
@@ -297,34 +269,11 @@ class Coordinator:
     """Creates a new AdbCallParser instance."""
     return adb_call_parser.AdbCallParser(
         adb_controller=self._simulator.create_adb_controller(),
-        tmp_dir=self._tmp_dir)
+        tmp_dir=self._config.tmp_dir or tempfile.gettempdir(),
+    )
 
   def execute_adb_call(self, call: adb_pb2.AdbRequest) -> adb_pb2.AdbResponse:
     return self._adb_call_parser.parse(call)
-
-  def update_task(self, task: task_pb2.Task) -> bool:
-    """Replaces the current task with a new task.
-
-    Args:
-      task: A new task to replace the current one.
-
-    Returns:
-      A bool indicating the success of the task setup.
-    """
-    self._task_manager.stop()
-    self._task_manager.update_task(task)
-
-    self._task_manager.start(
-        adb_call_parser_factory=self._create_adb_call_parser,
-        log_stream=self._simulator.create_log_stream(),
-    )
-    try:
-      self._task_manager.setup_task()
-      return True
-    except errors.StepCommandError:
-      logging.error('Failed to set up the task.')
-      self._stats['failed_task_updates'] += 1
-      return False
 
   def rl_reset(self) -> dm_env.TimeStep:
     """Resets the RL episode."""
@@ -351,7 +300,7 @@ class Coordinator:
 
     return self._task_manager.rl_reset(simulator_signals)
 
-  def rl_step(self, agent_action: Dict[str, np.ndarray]) -> dm_env.TimeStep:
+  def rl_step(self, agent_action: dict[str, np.ndarray]) -> dm_env.TimeStep:
     """Executes the selected action and returns a timestep.
 
     Args:
@@ -378,7 +327,7 @@ class Coordinator:
 
     return self._task_manager.rl_step(simulator_signals)
 
-  def _gather_simulator_signals(self) -> Dict[str, np.ndarray]:
+  def _gather_simulator_signals(self) -> dict[str, np.ndarray]:
     """Gathers data from various sources to assemble the RL observation."""
 
     # Get current timestamp and update the delta.
@@ -388,7 +337,8 @@ class Coordinator:
     self._latest_observation_time = now
 
     # Grab pixels.
-    if self._interaction_rate_sec > 0:
+    if self._config.interaction_rate_sec > 0:
+      assert self._interaction_thread is not None
       pixels = self._interaction_thread.screenshot()  # Async mode.
     else:
       pixels = self._simulator.get_screenshot()  # Sync mode.
@@ -396,13 +346,13 @@ class Coordinator:
     return {
         'pixels': pixels,
         'orientation': self._orientation,
-        'timedelta': np.int64(timestamp_delta),
+        'timedelta': np.array(timestamp_delta, dtype=np.int64),
     }
 
   def __del__(self):
     self.close()
 
-  def _send_action_to_simulator(self, action: Dict[str, np.ndarray]) -> None:
+  def _send_action_to_simulator(self, action: dict[str, np.ndarray]) -> None:
     """Sends the selected action to the simulator.
 
     The simulator will interpret the action as a touchscreen event and perform
@@ -414,25 +364,32 @@ class Coordinator:
     """
 
     try:
-      # If the action is a TOUCH or LIFT, send a touch event to the simulator.
-      if (action['action_type'] == action_type_lib.ActionType.TOUCH or
-          action['action_type'] == action_type_lib.ActionType.LIFT):
-        prepared_action = self._prepare_touch_action(action)
-        self._simulator.send_touch(prepared_action)
-      # If the action is a key event, send a key event to the simulator.
-      elif action['action_type'] == action_type_lib.ActionType.KEYDOWN:
-        self._simulator.send_key(action['keycode'], event_type='keydown')
-      elif action['action_type'] == action_type_lib.ActionType.KEYUP:
-        self._simulator.send_key(action['keycode'], event_type='keyup')
-      elif action['action_type'] == action_type_lib.ActionType.KEYPRESS:
-        self._simulator.send_key(action['keycode'], event_type='keypress')
+      match action['action_type']:
+        # If the action is a TOUCH or LIFT, send a touch event to the simulator.
+        case action_type_lib.ActionType.TOUCH | action_type_lib.ActionType.LIFT:
+          prepared_action = self._prepare_touch_action(action)
+          self._simulator.send_touch(prepared_action)
+        # If the action is a key event, send a key event to the simulator.
+        case action_type_lib.ActionType.KEYDOWN:
+          self._simulator.send_key(
+              action['keycode'].item(0), event_type='keydown'
+          )
+        case action_type_lib.ActionType.KEYUP:
+          self._simulator.send_key(
+              action['keycode'].item(0), event_type='keyup'
+          )
+        case action_type_lib.ActionType.KEYPRESS:
+          self._simulator.send_key(
+              action['keycode'].item(0), event_type='keypress'
+          )
     except (socket.error, errors.SendActionError):
       logging.exception('Unable to execute action. Restarting simulator.')
       self._stats['relaunch_count_execute_action'] += 1
       self._simulator_healthy = False
 
   def _prepare_touch_action(
-      self, action: Dict[str, np.ndarray]) -> List[Tuple[int, int, bool, int]]:
+      self, action: dict[str, np.ndarray]
+  ) -> list[tuple[int, int, bool, int]]:
     """Turns an AndroidEnv action into values that the simulator can interpret.
 
     Converts float-valued 'touch_position' to integer coordinates corresponding
@@ -460,14 +417,15 @@ class Coordinator:
     return touch_events
 
   def _split_touch_action(
-      self, action: Dict[str, np.ndarray]) -> List[Dict[str, np.ndarray]]:
+      self, action: dict[str, np.ndarray]
+  ) -> list[dict[str, np.ndarray]]:
     """Splits a multitouch action into a list of single-touch actions."""
 
     single_touch_actions = [{
         'action_type': action['action_type'],
         'touch_position': action['touch_position'],
     }]
-    for i in range(2, self._num_fingers + 1):
+    for i in range(2, self._config.num_fingers + 1):
       single_touch_actions.append({
           'action_type': action[f'action_type_{i}'],
           'touch_position': action[f'touch_position_{i}'],
@@ -479,7 +437,7 @@ class Coordinator:
 
     return time.time() - self._latest_observation_time
 
-  def stats(self) -> Dict[str, Any]:
+  def stats(self) -> dict[str, Any]:
     """Returns various statistics."""
 
     output = copy.deepcopy(self._stats)

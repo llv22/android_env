@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,15 +15,12 @@
 
 """Wraps the AndroidEnv environment to provide tap actions of a given duration."""
 
-from typing import Dict, Sequence
+from collections.abc import Sequence
 
 from android_env.components import action_type
 from android_env.wrappers import base_wrapper
 import dm_env
 import numpy as np
-
-
-ActionType = action_type.ActionType
 
 
 class TapActionWrapper(base_wrapper.BaseWrapper):
@@ -46,33 +43,35 @@ class TapActionWrapper(base_wrapper.BaseWrapper):
     return logs
 
   def _process_action(
-      self, action: Dict[str, np.ndarray]
-  ) -> Sequence[Dict[str, np.ndarray]]:
-
+      self, action: dict[str, np.ndarray]
+  ) -> Sequence[dict[str, np.ndarray]]:
     if self._touch_only:
       assert action['action_type'] == 0
       touch_action = action.copy()
-      touch_action['action_type'] = np.array(ActionType.TOUCH).astype(
-          self.action_spec()['action_type'].dtype)
+      touch_action['action_type'] = np.array(
+          action_type.ActionType.TOUCH
+      ).astype(self.action_spec()['action_type'].dtype)
       actions = [touch_action] * self._num_frames
       lift_action = action.copy()
-      lift_action['action_type'] = np.array(ActionType.LIFT).astype(
-          self.action_spec()['action_type'].dtype)
+      lift_action['action_type'] = np.array(action_type.ActionType.LIFT).astype(
+          self.action_spec()['action_type'].dtype
+      )
       actions.append(lift_action)
 
     else:
-      if action['action_type'] == ActionType.TOUCH:
+      if action['action_type'] == action_type.ActionType.TOUCH:
         actions = [action] * self._num_frames
         lift_action = action.copy()
-        lift_action['action_type'] = np.array(ActionType.LIFT).astype(
-            self.action_spec()['action_type'].dtype)
+        lift_action['action_type'] = np.array(
+            action_type.ActionType.LIFT
+        ).astype(self.action_spec()['action_type'].dtype)
         actions.append(lift_action)
       else:
         actions = [action] * (self._num_frames + 1)
 
     return actions
 
-  def step(self, action: Dict[str, np.ndarray]) -> dm_env.TimeStep:
+  def step(self, action: dict[str, np.ndarray]) -> dm_env.TimeStep:
     """Takes a step in the environment."""
     self._env_steps += self._num_frames + 1
     actions = self._process_action(action)
@@ -93,7 +92,7 @@ class TapActionWrapper(base_wrapper.BaseWrapper):
         discount=discount,
         observation=observation)
 
-  def action_spec(self) -> Dict[str, dm_env.specs.Array]:
+  def action_spec(self) -> dict[str, dm_env.specs.Array]:
     if self._touch_only:
       return {
           'action_type':

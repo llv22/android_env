@@ -1,5 +1,5 @@
 # coding=utf-8
-# Copyright 2022 DeepMind Technologies Limited.
+# Copyright 2024 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,9 +15,10 @@
 
 """A component that parses and processes SetupSteps."""
 
+from collections.abc import Sequence
 import copy
 import time
-from typing import Any, Dict, Optional, Sequence
+from typing import Any
 
 from absl import logging
 from android_env.components import adb_call_parser as adb_call_parser_lib
@@ -45,7 +46,7 @@ class SetupStepInterpreter:
         'total_time_waiting_for_app_screen': 0
     }
 
-  def stats(self) -> Dict[str, Any]:
+  def stats(self) -> dict[str, Any]:
     return copy.deepcopy(self._stats)
 
   def interpret(self, setup_steps: Sequence[task_pb2.SetupStep]) -> None:
@@ -110,45 +111,52 @@ class SetupStepInterpreter:
         f'Step failed: [{step_cmd}]') from latest_error
 
   def _execute_step_cmd(
-      self, step_cmd: task_pb2.SetupStep,
-      step_type: Optional[str]) -> Optional[adb_pb2.AdbResponse]:
+      self, step_cmd: task_pb2.SetupStep, step_type: str | None
+  ) -> adb_pb2.AdbResponse | None:
     """Executes a step command of given type."""
-    if not step_type:
-      return
 
-    if step_type == 'sleep':
-      time.sleep(step_cmd.sleep.time_sec)
-    elif step_type == 'adb_request':
-      response = self._adb_call_parser.parse(step_cmd.adb_request)
-      if response.status != adb_pb2.AdbResponse.Status.OK:
-        raise errors.AdbControllerError(
-            f'Failed to execute AdbRequest [{step_cmd.adb_request}].\n'
-            f'Status: {response.status}\n'
-            f'Error: {response.error_message}')
-      return response
-    else:
-      raise NotImplementedError('No step command of type [%s].' % step_type)
+    match step_type:
+      case None:
+        return None
+      case 'sleep':
+        time.sleep(step_cmd.sleep.time_sec)
+        return None
+      case 'adb_request':
+        response = self._adb_call_parser.parse(step_cmd.adb_request)
+        if response.status != adb_pb2.AdbResponse.Status.OK:
+          raise errors.AdbControllerError(
+              f'Failed to execute AdbRequest [{step_cmd.adb_request}].\n'
+              f'Status: {response.status}\n'
+              f'Error: {response.error_message}'
+          )
+        return response
+      case _:
+        raise NotImplementedError(f'No step command of type [{step_type}].')
 
-  def _check_success(self,
-                     success_check: Optional[str],
-                     success_condition: task_pb2.SuccessCondition) -> None:
+  def _check_success(
+      self,
+      success_check: str | None,
+      success_condition: task_pb2.SuccessCondition,
+  ) -> None:
     """Checks whether the given success condition was met."""
 
-    if not success_check:
-      return
-
-    if success_check == 'wait_for_app_screen':
-      wait_for_app_screen = success_condition.wait_for_app_screen
-      screen_checker = app_screen_checker.AppScreenChecker(
-          adb_call_parser=self._adb_call_parser,
-          expected_app_screen=wait_for_app_screen.app_screen)
-      wait_time = screen_checker.wait_for_app_screen(
-          timeout_sec=wait_for_app_screen.timeout_sec)
-      self._stats['total_time_waiting_for_app_screen'] += wait_time
-    elif success_check == 'check_install':
-      self._check_install(success_condition.check_install)
-    else:
-      raise NotImplementedError('No success check called [%s].' % success_check)
+    match success_check:
+      case None:
+        return None
+      case 'wait_for_app_screen':
+        wait_for_app_screen = success_condition.wait_for_app_screen
+        screen_checker = app_screen_checker.AppScreenChecker(
+            adb_call_parser=self._adb_call_parser,
+            expected_app_screen=wait_for_app_screen.app_screen,
+        )
+        wait_time = screen_checker.wait_for_app_screen(
+            timeout_sec=wait_for_app_screen.timeout_sec
+        )
+        self._stats['total_time_waiting_for_app_screen'] += wait_time
+      case 'check_install':
+        self._check_install(success_condition.check_install)
+      case _:
+        raise NotImplementedError(f'No success check called [{success_check}].')
 
   def _check_install(self, check_install: task_pb2.CheckInstall) -> None:
     """Checks that the given package is installed."""
